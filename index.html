@@ -59,22 +59,30 @@
     const { useState, useEffect, useMemo, useCallback } = React;
 
     // --- Firebase Setup & Mock Logic ---
-    const configStr = typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : null;
-    let firebaseConfig = null;
-    try {
-      if (configStr && configStr !== "{}" && configStr !== "") {
-        firebaseConfig = JSON.parse(configStr);
-      }
-    } catch(e) { console.error("Firebase config parse error", e); }
+    // ▼ ここにあなたのFirebase設定を直接書きます
+    const firebaseConfig = {
+      apiKey: "AIzaSyDAFwlFLR6Ck3hr9yRPkAEbwHJD_oV1BBI",
+      authDomain: "ito-game-90d85.firebaseapp.com",
+      projectId: "ito-game-90d85",
+      storageBucket: "ito-game-90d85.firebasestorage.app",
+      messagingSenderId: "142358300494",
+      appId: "1:142358300494:web:647d8b675776ccee03c01f",
+      measurementId: "G-4M06G7V7M0"
+    };
 
-    const isFirebaseReady = !!(firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "dummy");
-    
     let app, auth, db;
-    if (isFirebaseReady) {
+    
+    // ▼ 設定を使ってFirebaseを初期化します
+    try {
       app = firebase.initializeApp(firebaseConfig);
       auth = firebase.auth();
       db = firebase.firestore();
+    } catch(e) {
+      console.error("Firebaseの初期化に失敗しました", e);
     }
+
+    const isFirebaseReady = true;
+    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen';
 
     const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen';
 
