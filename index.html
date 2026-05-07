@@ -175,27 +175,26 @@
     };
 
     // --- API Helpers ---
-    const generateAIContent = async (prompt, schema, customApiKey) => {
-      const apiKey = customApiKey || (isFirebaseReady ? "" : ""); // In real usage, use env var or user input
-      if (!apiKey) throw new Error("API Key is missing. Please set it in Settings.");
-      
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-      const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: { type: "OBJECT", properties: schema }
-        }
-      };
+    // ▼ 引数から customApiKey を削除し、VercelのAPIを叩くように変更
+    const generateAIContent = async (prompt, schema) => {
+      // Googleではなく、先ほど作った自分のVercelバックエンドへ送る
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, schema })
+      });
 
-      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error('API Error');
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      return JSON.parse(text);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'API Error');
+      }
+      
+      // バックエンドですでにJSONパースされているのでそのまま返す
+      return await response.json();
     };
 
-    const checkWordWithAI = async (content, author, customApiKey) => {
+    // ▼ 引数から customApiKey を削除
+    const checkWordWithAI = async (content, author) => {
       const prompt = `以下の言葉が、指定された発言者によって実際に言われたものか、歴史的文献や信頼できる記録に基づいているかを厳密に判定してください。
 言葉: "${content}"
 発言者: "${author}"
@@ -220,9 +219,10 @@
         authorKeywords: { type: "ARRAY", items: { type: "STRING" } }
       };
 
-      return generateAIContent(prompt, schema, customApiKey);
+      // ▼ 呼び出し時にも customApiKey を渡さない
+      return generateAIContent(prompt, schema);
     };
-
+    
     // --- UI Components ---
     const AuthorAvatar = ({ name, size = 'md', onClick }) => {
       const initial = name ? name.charAt(0).toUpperCase() : '?';
@@ -796,7 +796,7 @@
 
         try {
           // AI判定
-          const result = await checkWordWithAI(content, author, userProfile?.geminiApiKey);
+          const result = await checkWordWithAI(content, author);
           
           if (result.isValid) {
             const cleanAuthor = author.trim();
@@ -902,11 +902,9 @@
     }
 
     function SettingsScreen({ userProfile, onUpdateProfile, onLogout, t }) {
-      const [apiKeyInput, setApiKeyInput] = useState(userProfile?.geminiApiKey || '');
 
       const toggleFont = () => onUpdateProfile({ fontPreference: userProfile.fontPreference === 'sans' ? 'serif' : 'sans' });
       const toggleLang = () => onUpdateProfile({ appLanguage: userProfile.appLanguage === 'ja' ? 'en' : 'ja' });
-      const saveSettings = () => onUpdateProfile({ geminiApiKey: apiKeyInput });
 
       return (
         <div className="p-8 md:p-12 min-h-full bg-[var(--bg-color)] animate-fade-up">
@@ -924,16 +922,6 @@
                      <div className="flex items-center gap-2"><Languages className="w-4 h-4"/> {t.langSetting}</div>
                   </button>
                 </div>
-              </div>
-
-              {/* AI Config */}
-              <div className="bg-white p-6 rounded-2xl border border-[var(--border-color)] shadow-sm">
-                 <h3 className="text-sm font-bold tracking-widest text-[#8C8C85] mb-4 uppercase">Gemini AI Engine</h3>
-                 <p className="text-xs text-[#8C8C85] leading-relaxed mb-4">AIの照合・整形機能を使用するにはAPIキーを入力してください。デバイス内に保存されます。</p>
-                 <div className="flex gap-2">
-                    <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="flex-1 p-3 text-sm rounded-xl border border-[#EAE9E4] outline-none focus:border-[#2C2C2A] transition-colors" placeholder="AIzaSy..." />
-                    <button onClick={saveSettings} className="bg-[#2C2C2A] text-white px-5 py-3 rounded-xl text-sm font-bold tracking-wider hover:bg-black transition-colors">Save</button>
-                 </div>
               </div>
 
               {/* Account */}
