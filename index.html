@@ -175,23 +175,28 @@
     };
 
     // --- API Helpers ---
-    // ▼ 引数から customApiKey を削除し、VercelのAPIを叩くように変更
     const generateAIContent = async (prompt, schema) => {
-      // Googleではなく、先ほど作った自分のVercelバックエンドへ送る
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, schema })
-      });
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, schema })
+      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'API Error');
-      }
-      
-      // バックエンドですでにJSONパースされているのでそのまま返す
-      return await response.json();
-    };
+      if (!response.ok) {
+        // 返ってきたデータがJSONかどうかを確認
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'APIエラーが発生しました');
+        } else {
+          // JSON以外（HTMLエラーページなど）が返ってきた場合
+          console.error("エラーレスポンス:", await response.text());
+          throw new Error(`APIへの接続に失敗しました (Status: ${response.status})。APIエンドポイントの設定を確認してください。`);
+        }
+      }
+      
+      return await response.json();
+    };
 
     // ▼ 引数から customApiKey を削除
     const checkWordWithAI = async (content, author) => {
