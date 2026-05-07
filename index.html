@@ -398,7 +398,6 @@
               onFollow={() => toggleFollowAuthor(activeAuthor)}
               isFollowing={(userProfile?.followedAuthors || []).includes(activeAuthor)}
               onKeywordClick={setActiveKeyword}
-              mockMode={mockMode}
               t={t}
               lang={lang}
             />
@@ -481,7 +480,6 @@
                   <h3 className="font-bold text-sm tracking-widest text-[#8C8C85] mb-4 uppercase">Concept</h3>
                   <p className="text-sm leading-loose text-[#2C2C2A]">
                     {t.subtitle}<br/><br/>
-                    {mockMode && <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded text-xs">{t.demoModeInfo}</span>}
                   </p>
                 </div>
               </aside>
