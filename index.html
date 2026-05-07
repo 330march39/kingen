@@ -78,18 +78,6 @@
 
     const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen';
 
-    // --- Mock Data for Preview / Demo Mode ---
-    const MOCK_UID = "demo-user-001";
-    const initialMockPosts = [
-      { id: 'm1', author: 'ソクラテス', content: '無知の知', ja_text: '自分に知恵がないことを自覚している点で、私はあの人より知恵がある。', en_text: 'I am wiser than this man, for neither of us appears to know anything great and good; but he fancies he knows something, although he knows nothing; whereas I, as I do not know anything, so I do not fancy I do.', estimatedAge_relative: '約2400年前', estimatedAge_absolute: '紀元前400年頃', explanation_ja: 'ソクラテスが神託の真意を確かめるため、賢者と呼ばれる人々と対話した末に得た気づき。', episode_ja: '彼が死刑判決を受けた「ソクラテスの弁明」にて語られたとされる、哲学の原点とも言える言葉です。自分を賢いと思い込むよりも、無知を自覚することこそが真の知恵への第一歩だと説きました。', likes: 124, likedBy: [], createdAt: Date.now() - 86400000, authorKeywords: ['古代ギリシャ', '哲学者'], postedByUserNumber: 1024 },
-      { id: 'm2', author: 'フリードリヒ・ニーチェ', content: '深淵をのぞく時、深淵もまたこちらをのぞいているのだ。', ja_text: '怪物と闘う者は、その過程で自らが怪物と化さぬよう心せよ。おまえが長く深淵を覗き込むならば、深淵もまた等しくおまえを見返すのだ。', en_text: 'He who fights with monsters should look to it that he himself does not become a monster. And if you gaze long into an abyss, the abyss also gazes into you.', estimatedAge_relative: '約140年前', estimatedAge_absolute: '1886年', explanation_ja: '悪や狂気と対峙する際、自分自身もそれに染まってしまう危険性を警告した言葉。', episode_ja: '『善悪の彼岸』に記された一節。道徳的価値観を根底から問い直したニーチェらしい、人間の内面に潜む闇と向き合うことの恐ろしさを表現しています。', likes: 89, likedBy: [], createdAt: Date.now() - 40000000, authorKeywords: ['19世紀', '実存主義', '哲学者'], postedByUserNumber: 2579 }
-    ];
-    let globalMockPosts = [...initialMockPosts];
-    let globalMockAuthors = [
-      { name: 'ソクラテス', description_ja: '古代ギリシャの哲学者。西洋哲学の祖の一人。自らは著作を残さず、対話を通じて人々に無知を自覚させた。', keywords_ja: ['古代ギリシャ', '哲学者'] },
-      { name: 'フリードリヒ・ニーチェ', description_ja: '19世紀ドイツの哲学者。「神は死んだ」などの鋭い言葉で、既存のキリスト教的道徳を批判し、超人思想を提唱した。', keywords_ja: ['19世紀', '実存主義', '哲学者'] }
-    ];
-
     // --- Icons ---
     const Icon = ({ children, className = "w-6 h-6", ...props }) => (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
@@ -268,50 +256,41 @@
       const [activeKeyword, setActiveKeyword] = useState(null);
       
       const [isInitializing, setIsInitializing] = useState(true);
-      const [mockMode, setMockMode] = useState(!isFirebaseReady);
 
       // Initialization
-      useEffect(() => {
-        if (!isFirebaseReady) {
-          // Mock Auth Init
-          setTimeout(() => {
-            setAuthUser({ uid: MOCK_UID });
-            setUserProfile({ username: 'ゲスト識者', userNumber: 9999, followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: '' });
-            setPosts([...globalMockPosts]);
-            setIsInitializing(false);
-          }, 600);
-          return;
-        }
+      useEffect(() => {
+        if (!isFirebaseReady) {
+          alert("Firebaseの設定が見つかりません。システムを起動できません。");
+          setIsInitializing(false);
+          return;
+        }
 
-        // Real Firebase Auth
-        const initAuth = async () => {
-          try {
-            if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-              await auth.signInWithCustomToken(window.__initial_auth_token);
-            } else {
-              await auth.signInAnonymously();
-            }
-          } catch (error) {
-            console.error("Auth init failed:", error);
-            // Fallback to mock on error
-            setMockMode(true);
-            setAuthUser({ uid: MOCK_UID });
-            setUserProfile({ username: 'Error Guest', userNumber: 0, fontPreference: 'serif' });
-            setIsInitializing(false);
-          }
-        };
-        initAuth();
+        // Real Firebase Auth
+        const initAuth = async () => {
+          try {
+            if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+              await auth.signInWithCustomToken(window.__initial_auth_token);
+            } else {
+              await auth.signInAnonymously();
+            }
+          } catch (error) {
+            console.error("Auth init failed:", error);
+            alert("データベースへの接続に失敗しました。");
+            setIsInitializing(false);
+          }
+        };
+        initAuth();
 
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-          setAuthUser(user);
-          if (!user) setIsInitializing(false);
-        });
-        return () => unsubscribe();
-      }, []);
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setAuthUser(user);
+          if (!user) setIsInitializing(false);
+        });
+        return () => unsubscribe();
+      }, []);
 
       // Data Fetching (Real)
       useEffect(() => {
-        if (mockMode || !authUser) return;
+        if (!authUser) return;
         const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data');
         const unsubP = profileRef.onSnapshot(doc => {
           setUserProfile(doc.exists ? doc.data() : null);
@@ -378,7 +357,7 @@
       };
 
       const handleLogout = async () => {
-        if (!mockMode) await auth.signOut();
+        await auth.signOut();
         setAuthUser(null);
         setUserProfile(null);
         setIsInitializing(false);
@@ -468,13 +447,10 @@
       return (
         <div className={`min-h-screen bg-[#EAE9E4] text-[#2C2C2A] flex justify-center ${fontClass}`}>
           {!userProfile ? (
-            <LoginScreen authUser={authUser} mockMode={mockMode} onLogin={(name) => {
-              if(mockMode) setUserProfile({ username: name, userNumber: Math.floor(1000+Math.random()*9000), fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: '' });
-              else {
-                db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').set({
-                  username: name, userNumber: Math.floor(1000+Math.random()*9000), followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: ''
-                });
-              }
+            <LoginScreen authUser={authUser} onLogin={(name) => {
+              db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').set({
+                username: name, userNumber: Math.floor(1000+Math.random()*9000), followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: ''
+              });
             }} t={t} />
           ) : (
             <div className="w-full max-w-[1200px] flex relative bg-[var(--bg-color)] shadow-2xl shadow-black/5">
@@ -527,26 +503,25 @@
     // Screens
     // ==========================================
 
-    function LoginScreen({ authUser, mockMode, onLogin, t }) {
-      const [username, setUsername] = useState('');
+    function LoginScreen({ authUser, onLogin, t }) {
+  const [username, setUsername] = useState('');
+  
+  return (
+    <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto h-screen p-8 bg-[var(--bg-color)] shadow-xl animate-fade-up">
+      <h1 className="text-5xl font-serif font-bold tracking-[0.2em] mb-4 text-[#2C2C2A]">KINGEN</h1>
+      <p className="text-[#8C8C85] text-sm mb-12 text-center tracking-widest">{t.subtitle}</p>
       
-      return (
-        <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto h-screen p-8 bg-[var(--bg-color)] shadow-xl animate-fade-up">
-          <h1 className="text-5xl font-serif font-bold tracking-[0.2em] mb-4 text-[#2C2C2A]">KINGEN</h1>
-          <p className="text-[#8C8C85] text-sm mb-12 text-center tracking-widest">{t.subtitle}</p>
-          
-          <form onSubmit={(e) => { e.preventDefault(); if(username.trim()) onLogin(username.trim()); }} className="w-full space-y-6">
-            <div>
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] focus:border-[#2C2C2A] outline-none transition-colors text-center text-lg placeholder-[#C4C3BE]" placeholder="あなたの名前" required />
-            </div>
-            <button type="submit" className="w-full bg-[#2C2C2A] text-white py-4 rounded-xl font-bold tracking-widest hover:bg-black transition-all active:scale-[0.98] shadow-lg shadow-black/10">
-              {t.loginBtn}
-            </button>
-          </form>
-          {mockMode && <p className="mt-8 text-xs text-amber-600">{t.demoModeInfo}</p>}
+      <form onSubmit={(e) => { e.preventDefault(); if(username.trim()) onLogin(username.trim()); }} className="w-full space-y-6">
+        <div>
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] outline-none text-center text-lg placeholder-[#C4C3BE]" placeholder="あなたの名前" required />
         </div>
-      );
-    }
+        <button type="submit" className="w-full bg-[#2C2C2A] text-white py-4 rounded-xl font-bold tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10">
+          {t.loginBtn}
+        </button>
+      </form>
+    </div>
+  );
+}
 
     function HomeScreen({ posts, userProfile, onPostClick, onLike, currentUserId, onAuthorClick, t, lang }) {
       const [subTab, setSubTab] = useState('recommend');
@@ -674,21 +649,17 @@
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        const fetchInfo = async () => {
-          setLoading(true);
-          try {
-            if (mockMode) {
-              const mockA = globalMockAuthors.find(a => a.name === authorName);
-              setAuthorInfo(mockA || { description_ja: "プロフィール情報がありません。", keywords_ja: [] });
-            } else {
-              const authorRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('authors').doc(authorName);
-              const docSnap = await authorRef.get();
-              setAuthorInfo(docSnap.exists ? docSnap.data() : { description_ja: "プロフィール情報がありません。", keywords_ja: [] });
-            }
-          } catch (err) { console.error(err); } finally { setLoading(false); }
-        };
-        fetchInfo();
-      }, [authorName, mockMode]);
+        const fetchInfo = async () => {
+          setLoading(true);
+          try {
+            // モックモードの分岐を消し、Firebaseのみにします
+            const authorRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('authors').doc(authorName);
+            const docSnap = await authorRef.get();
+            setAuthorInfo(docSnap.exists ? docSnap.data() : { description_ja: "プロフィール情報がありません。", keywords_ja: [] });
+          } catch (err) { console.error(err); } finally { setLoading(false); }
+        };
+        fetchInfo();
+      }, [authorName]); // mockModeを依存配列から削除
 
       const description = lang === 'ja' ? (authorInfo?.description_ja) : (authorInfo?.description_en || authorInfo?.description_ja);
       const keywords = lang === 'ja' ? (authorInfo?.keywords_ja || []) : (authorInfo?.keywords_en || authorInfo?.keywords_ja || []);
