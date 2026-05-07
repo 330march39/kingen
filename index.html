@@ -264,35 +264,20 @@
       const [isInitializing, setIsInitializing] = useState(true);
 
       // Initialization
-      useEffect(() => {
-        if (!isFirebaseReady) {
-          alert("Firebaseの設定が見つかりません。システムを起動できません。");
-          setIsInitializing(false);
-          return;
-        }
+      useEffect(() => {
+        if (!isFirebaseReady) {
+          alert("Firebaseの設定が見つかりません。");
+          setIsInitializing(false);
+          return;
+        }
 
-        // Real Firebase Auth
-        const initAuth = async () => {
-          try {
-            if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-              await auth.signInWithCustomToken(window.__initial_auth_token);
-            } else {
-              await auth.signInAnonymously();
-            }
-          } catch (error) {
-            console.error("Auth init failed:", error);
-            alert("データベースへの接続に失敗しました。");
-            setIsInitializing(false);
-          }
-        };
-        initAuth();
-
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-          setAuthUser(user);
-          if (!user) setIsInitializing(false);
-        });
-        return () => unsubscribe();
-      }, []);
+        // ユーザーのログイン状態を監視するだけにする
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setAuthUser(user);
+          if (!user) setIsInitializing(false);
+        });
+        return () => unsubscribe();
+      }, []);
 
       // Data Fetching (Real)
       useEffect(() => {
@@ -348,6 +333,28 @@
         setAuthUser(null);
         setUserProfile(null);
         setIsInitializing(false);
+      };
+
+      const handleLogin = async (email, password) => {
+        setIsInitializing(true);
+        await auth.signInWithEmailAndPassword(email, password);
+      };
+
+      const handleSignUp = async (email, password, username) => {
+        setIsInitializing(true);
+        // 1. メアドとパスワードでアカウント作成
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const newUser = userCredential.user;
+        
+        // 2. 作成されたユーザーのプロフィールをFirestoreに保存
+        await db.collection('artifacts').doc(appId).collection('users').doc(newUser.uid).collection('profile').doc('data').set({
+          username: username, 
+          userNumber: Math.floor(1000+Math.random()*9000), 
+          followedAuthors: [], 
+          fontPreference: 'serif', 
+          appLanguage: 'ja', 
+          geminiApiKey: ''
+        });
       };
 
       if (isInitializing) {
@@ -433,11 +440,11 @@
       return (
         <div className={`min-h-screen bg-[#EAE9E4] text-[#2C2C2A] flex justify-center ${fontClass}`}>
           {!userProfile ? (
-            <LoginScreen authUser={authUser} onLogin={(name) => {
-              db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').set({
-                username: name, userNumber: Math.floor(1000+Math.random()*9000), followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: ''
-              });
-            }} t={t} />
+            <LoginScreen 
+               onLogin={handleLogin} 
+               onSignUp={handleSignUp} 
+               t={t} 
+            />
           ) : (
             <div className="w-full max-w-[1200px] flex relative bg-[var(--bg-color)] shadow-2xl shadow-black/5">
               
@@ -488,22 +495,54 @@
     // Screens
     // ==========================================
 
-    function LoginScreen({ authUser, onLogin, t }) {
-  const [username, setUsername] = useState('');
-  
+    function LoginScreen({ onLogin, onSignUp, t }) {
+  const [isLoginMode, setIsLoginMode] = useState(true); // true: ログイン, false: 新規登録
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState(''); // 新規登録時のみ使用
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    try {
+      if (isLoginMode) {
+        await onLogin(email, password);
+      } else {
+        if (!username.trim()) throw new Error('名前を入力してください。');
+        await onSignUp(email, password, username.trim());
+      }
+    } catch (error) {
+      // Firebaseのエラーを日本語で分かりやすく変換
+      if (error.code === 'auth/email-already-in-use') setErrorMsg('このメールアドレスは既に使われています。');
+      else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') setErrorMsg('メールアドレスかパスワードが間違っています。');
+      else if (error.code === 'auth/weak-password') setErrorMsg('パスワードは6文字以上にしてください。');
+      else setErrorMsg(error.message);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto h-screen p-8 bg-[var(--bg-color)] shadow-xl animate-fade-up">
       <h1 className="text-5xl font-serif font-bold tracking-[0.2em] mb-4 text-[#2C2C2A]">KINGEN</h1>
-      <p className="text-[#8C8C85] text-sm mb-12 text-center tracking-widest">{t.subtitle}</p>
+      <p className="text-[#8C8C85] text-sm mb-8 text-center tracking-widest">{t.subtitle}</p>
       
-      <form onSubmit={(e) => { e.preventDefault(); if(username.trim()) onLogin(username.trim()); }} className="w-full space-y-6">
-        <div>
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] outline-none text-center text-lg placeholder-[#C4C3BE]" placeholder="あなたの名前" required />
-        </div>
-        <button type="submit" className="w-full bg-[#2C2C2A] text-white py-4 rounded-xl font-bold tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10">
-          {t.loginBtn}
+      {errorMsg && <div className="w-full p-3 mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg text-center">{errorMsg}</div>}
+
+      <form onSubmit={handleSubmit} className="w-full space-y-4">
+        {!isLoginMode && (
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] outline-none text-lg placeholder-[#C4C3BE]" placeholder="あなたの名前（表示名）" required={!isLoginMode} />
+        )}
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] outline-none text-lg placeholder-[#C4C3BE]" placeholder="メールアドレス" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] outline-none text-lg placeholder-[#C4C3BE]" placeholder="パスワード（6文字以上）" required minLength={6} />
+        
+        <button type="submit" className="w-full bg-[#2C2C2A] text-white py-4 mt-4 rounded-xl font-bold tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10">
+          {isLoginMode ? 'ログインする' : '新規登録して入場する'}
         </button>
       </form>
+
+      <button onClick={() => { setIsLoginMode(!isLoginMode); setErrorMsg(''); }} className="mt-8 text-sm text-[#8C8C85] hover:text-[#2C2C2A] transition-colors underline underline-offset-4">
+        {isLoginMode ? 'アカウントをお持ちでない方はこちら（新規登録）' : 'すでにアカウントをお持ちの方はこちら（ログイン）'}
+      </button>
     </div>
   );
 }
@@ -899,29 +938,5 @@
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
-  
-  <script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyDAFwlFLR6Ck3hr9yRPkAEbwHJD_oV1BBI",
-    authDomain: "ito-game-90d85.firebaseapp.com",
-    projectId: "ito-game-90d85",
-    storageBucket: "ito-game-90d85.firebasestorage.app",
-    messagingSenderId: "142358300494",
-    appId: "1:142358300494:web:647d8b675776ccee03c01f",
-    measurementId: "G-4M06G7V7M0"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
 </body>
 </html>
