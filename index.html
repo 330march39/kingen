@@ -305,7 +305,7 @@
         });
 
         return () => { unsubP(); unsubPosts(); };
-      }, [authUser, mockMode]);
+}, [authUser]);
 
       // Actions
       const toggleLike = async (postId, likedBy) => {
@@ -313,12 +313,7 @@
         const isLiked = likedBy.includes(authUser.uid);
         let newLikedBy = isLiked ? likedBy.filter(id => id !== authUser.uid) : [...likedBy, authUser.uid];
 
-        if (mockMode) {
-          globalMockPosts = globalMockPosts.map(p => p.id === postId ? { ...p, likedBy: newLikedBy, likes: newLikedBy.length } : p);
-          setPosts([...globalMockPosts]);
-        } else {
-          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts').doc(postId).update({ likes: newLikedBy.length, likedBy: newLikedBy });
-        }
+        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts').doc(postId).update({ likes: newLikedBy.length, likedBy: newLikedBy });
       };
 
       const toggleFollowAuthor = async (authorName) => {
@@ -330,30 +325,16 @@
           newFollowing.push(authorName);
         }
 
-        if (mockMode) {
-          setUserProfile({ ...userProfile, followedAuthors: newFollowing });
-        } else {
-          await db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').update({ followedAuthors: newFollowing });
-        }
+        await db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').update({ followedAuthors: newFollowing });
       };
 
       const updateProfile = async (updates) => {
         if (!authUser) return;
-        if (mockMode) {
-          setUserProfile({ ...userProfile, ...updates });
-        } else {
           await db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').update(updates);
-        }
       };
 
       const addPost = async (postData) => {
-        if (mockMode) {
-          const newPost = { ...postData, id: 'm' + Date.now() };
-          globalMockPosts = [newPost, ...globalMockPosts];
-          setPosts([...globalMockPosts]);
-        } else {
           await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts').add(postData);
-        }
       };
 
       const handleLogout = async () => {
@@ -642,7 +623,7 @@
       );
     }
 
-    function AuthorProfileScreen({ authorName, posts, onBack, userProfile, onPostClick, onFollow, isFollowing, onKeywordClick, mockMode, t, lang }) {
+    function AuthorProfileScreen({ authorName, posts, onBack, userProfile, onPostClick, onFollow, isFollowing, onKeywordClick, t, lang }) {
       const [authorInfo, setAuthorInfo] = useState(null);
       const [loading, setLoading] = useState(true);
 
