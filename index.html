@@ -3,21 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>てつがくSNS KINGEN</title>
+  <title>KINGEN - 時代を超える言葉</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- React & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- Firebase (Compat versions for synchronous loading to prevent blank screen errors) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
   <style>
+    :root {
+      --bg-color: #FDFDFB; /* 古い紙のような暖かみのある白 */
+      --text-main: #2C2C2A;
+      --text-muted: #8C8C85;
+      --border-color: #EAE9E4;
+    }
     body {
       margin: 0;
       padding: 0;
-      background-color: #f9fafb;
+      background-color: var(--bg-color);
+      color: var(--text-main);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
@@ -25,150 +38,144 @@
       width: 0px;
       background: transparent;
     }
-    .whitespace-pre-wrap {
-      white-space: pre-wrap;
+    .whitespace-pre-wrap { white-space: pre-wrap; }
+    
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
     }
+    .animate-fade-up {
+      animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .delay-100 { animation-delay: 100ms; }
+    .delay-200 { animation-delay: 200ms; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <!-- Firebase の読み込みと React コードのコンパイル実行を制御 -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, query, updateDoc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // グローバルにFirebase関数をエクスポート
-    window.FirebaseLib = {
-      initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut,
-      getFirestore, collection, doc, setDoc, getDoc, onSnapshot, query, updateDoc, deleteDoc, addDoc
-    };
-
-    // Firebaseの準備が完了してからBabelでコンパイル＆実行することで「真っ白エラー」を防止
-    try {
-      const code = document.getElementById('react-app-code').textContent;
-      const compiled = Babel.transform(code, { presets: ['react'] }).code;
-      const script = document.createElement('script');
-      script.textContent = compiled;
-      document.body.appendChild(script);
-    } catch (e) {
-      console.error("Babel Compilation Error:", e);
-      document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red;">アプリケーションの読み込みに失敗しました。再読み込みしてください。</div>';
-    }
-  </script>
-
-  <!-- React アプリケーションコード (プレーンテキストとして定義) -->
-  <script type="text/plain" id="react-app-code">
+  <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
-    const { 
-      initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut,
-      getFirestore, collection, doc, setDoc, getDoc, onSnapshot, query, updateDoc, deleteDoc, addDoc
-    } = window.FirebaseLib;
+
+    // --- Firebase Setup & Mock Logic ---
+    const configStr = typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : null;
+    let firebaseConfig = null;
+    try {
+      if (configStr && configStr !== "{}" && configStr !== "") {
+        firebaseConfig = JSON.parse(configStr);
+      }
+    } catch(e) { console.error("Firebase config parse error", e); }
+
+    const isFirebaseReady = !!(firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "dummy");
+    
+    let app, auth, db;
+    if (isFirebaseReady) {
+      app = firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+    }
+
+    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen';
+
+    // --- Mock Data for Preview / Demo Mode ---
+    const MOCK_UID = "demo-user-001";
+    const initialMockPosts = [
+      { id: 'm1', author: 'ソクラテス', content: '無知の知', ja_text: '自分に知恵がないことを自覚している点で、私はあの人より知恵がある。', en_text: 'I am wiser than this man, for neither of us appears to know anything great and good; but he fancies he knows something, although he knows nothing; whereas I, as I do not know anything, so I do not fancy I do.', estimatedAge_relative: '約2400年前', estimatedAge_absolute: '紀元前400年頃', explanation_ja: 'ソクラテスが神託の真意を確かめるため、賢者と呼ばれる人々と対話した末に得た気づき。', episode_ja: '彼が死刑判決を受けた「ソクラテスの弁明」にて語られたとされる、哲学の原点とも言える言葉です。自分を賢いと思い込むよりも、無知を自覚することこそが真の知恵への第一歩だと説きました。', likes: 124, likedBy: [], createdAt: Date.now() - 86400000, authorKeywords: ['古代ギリシャ', '哲学者'], postedByUserNumber: 1024 },
+      { id: 'm2', author: 'フリードリヒ・ニーチェ', content: '深淵をのぞく時、深淵もまたこちらをのぞいているのだ。', ja_text: '怪物と闘う者は、その過程で自らが怪物と化さぬよう心せよ。おまえが長く深淵を覗き込むならば、深淵もまた等しくおまえを見返すのだ。', en_text: 'He who fights with monsters should look to it that he himself does not become a monster. And if you gaze long into an abyss, the abyss also gazes into you.', estimatedAge_relative: '約140年前', estimatedAge_absolute: '1886年', explanation_ja: '悪や狂気と対峙する際、自分自身もそれに染まってしまう危険性を警告した言葉。', episode_ja: '『善悪の彼岸』に記された一節。道徳的価値観を根底から問い直したニーチェらしい、人間の内面に潜む闇と向き合うことの恐ろしさを表現しています。', likes: 89, likedBy: [], createdAt: Date.now() - 40000000, authorKeywords: ['19世紀', '実存主義', '哲学者'], postedByUserNumber: 2579 }
+    ];
+    let globalMockPosts = [...initialMockPosts];
+    let globalMockAuthors = [
+      { name: 'ソクラテス', description_ja: '古代ギリシャの哲学者。西洋哲学の祖の一人。自らは著作を残さず、対話を通じて人々に無知を自覚させた。', keywords_ja: ['古代ギリシャ', '哲学者'] },
+      { name: 'フリードリヒ・ニーチェ', description_ja: '19世紀ドイツの哲学者。「神は死んだ」などの鋭い言葉で、既存のキリスト教的道徳を批判し、超人思想を提唱した。', keywords_ja: ['19世紀', '実存主義', '哲学者'] }
+    ];
 
     // --- Icons ---
     const Icon = ({ children, className = "w-6 h-6", ...props }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
     );
-    const Home = (p) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>;
-    const PlusCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></Icon>;
-    const User = (p) => <Icon {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
-    const Heart = (p) => <Icon {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></Icon>;
-    const ChevronLeft = (p) => <Icon {...p}><path d="m15 18-6-6 6-6"/></Icon>;
-    const Bot = (p) => <Icon {...p}><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></Icon>;
-    const BookOpen = (p) => <Icon {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></Icon>;
-    const Settings = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
-    const Loader2 = (p) => <Icon {...p} className={`animate-spin ${p.className || "w-6 h-6"}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
-    const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></Icon>;
-    const AlertCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
-    const Languages = (p) => <Icon {...p}><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></Icon>;
+    const HomeIcon = (p) => <Icon {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>;
+    const PenIcon = (p) => <Icon {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>;
+    const UserIcon = (p) => <Icon {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
+    const HeartIcon = (p) => <Icon {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></Icon>;
+    const ChevronLeftIcon = (p) => <Icon {...p}><path d="m15 18-6-6 6-6"/></Icon>;
+    const BotIcon = (p) => <Icon {...p}><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></Icon>;
+    const BookIcon = (p) => <Icon {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></Icon>;
+    const SettingsIcon = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
+    const LoaderIcon = (p) => <Icon {...p} className={`animate-spin ${p.className || "w-6 h-6"}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+    const SearchIcon = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></Icon>;
 
-    // --- Translations (i18n) ---
+    // --- Translations ---
     const i18n = {
       ja: {
         appName: 'KINGEN',
-        subtitle: '質の高い言葉だけが存在するSNS',
-        loginId: 'ID (ユーザー名)',
-        password: 'パスワード',
-        loginBtn: 'ログイン',
-        registerBtn: '新規登録してはじめる',
-        noAccount: 'アカウントをお持ちでない方はこちら',
-        hasAccount: 'すでにアカウントをお持ちの方はこちら',
-        home: 'ホーム',
-        recommend: 'おすすめ',
-        following: 'フォロー',
-        add: '投稿',
-        mypage: 'マイページ',
-        noPosts: '投稿がありません。',
-        postTitle: '名言を共有する',
-        wordLabel: '言葉',
-        wordPlaceholder: '好きな名言や金言を入力してください',
-        authorLabel: '発言者',
-        authorPlaceholder: 'ソクラテス、ゲーテ、アニメキャラ名など',
-        checkBtn: 'AIでチェックして投稿する',
-        checking: 'AIが確認中...',
-        postNote: '投稿前にAIが歴史的記録に基づく実在性をチェックします。「こんにちは」等の一般的な言葉や現代人のコメントは投稿できません。AIが言葉を正確に修正し、美しく表示できるように改行を整えます。',
+        subtitle: '時を超えた言葉が、現代に届く場所',
+        loginBtn: '入場する',
+        demoModeInfo: '※デモモードで動作中（設定でAPIキーを入れるとAIが動作します）',
+        home: 'タイムライン',
+        recommend: 'すべての記録',
+        following: 'フォロー中',
+        add: '記録する',
+        mypage: '手記',
+        settings: '設定',
+        noPosts: 'まだ記録がありません。',
+        postTitle: '言葉を記録する',
+        wordPlaceholder: '歴史に刻まれた言葉を入力してください',
+        authorPlaceholder: '発言者（例：ソクラテス）',
+        checkBtn: 'AIで史実を確認し、美しく整える',
+        checking: '記録を照合しています...',
+        postNote: 'AIが歴史的文献に基づき言葉を検証・修正し、最も美しい形で改行を整えます。推測や現代人の日常会話は記録できません。',
         followBtn: 'フォロー',
         followingBtn: 'フォロー中',
         aiExp: 'AI 解説',
         episode: '深掘りエピソード',
         originalText: '英訳・原文',
-        posterMark: '投稿者マーク',
-        memberNo: '会員番号',
-        myPosts: '自分の投稿一覧',
-        fontGothic: 'ゴシック体',
-        fontMincho: '明朝体',
-        langSetting: 'Language: 日本語',
-        authorProfileTitle: 'プロフィール'
+        memberNo: '識者番号',
+        myPosts: 'あなたの記録',
+        fontSetting: 'フォント: ',
+        langSetting: '言語: 日本語',
+        authorProfileTitle: '人物録',
+        keywordSearch: 'の検索結果',
+        logout: '退出する'
       },
       en: {
         appName: 'KINGEN',
-        subtitle: 'A Social Network of Profound Words',
-        loginId: 'ID (Username)',
-        password: 'Password',
-        loginBtn: 'Login',
-        registerBtn: 'Sign up & Start',
-        noAccount: "Don't have an account?",
-        hasAccount: 'Already have an account?',
-        home: 'Home',
-        recommend: 'For You',
+        subtitle: 'Where timeless words reach the present',
+        loginBtn: 'Enter',
+        demoModeInfo: '*Running in Demo Mode',
+        home: 'Timeline',
+        recommend: 'All Records',
         following: 'Following',
-        add: 'Post',
-        mypage: 'Profile',
-        noPosts: 'No posts yet.',
-        postTitle: 'Share a Quote',
-        wordLabel: 'Quote',
-        wordPlaceholder: 'Enter a famous quote or maxim',
-        authorLabel: 'Author',
-        authorPlaceholder: 'Socrates, Goethe, etc.',
-        checkBtn: 'Check with AI & Post',
-        checking: 'AI is verifying...',
-        postNote: 'AI verifies the quote against historical records. Common greetings or modern personal comments are not allowed. AI will correct the quote to its accurate form and format line breaks for beautiful display.',
+        add: 'Record',
+        mypage: 'Journal',
+        settings: 'Settings',
+        noPosts: 'No records yet.',
+        postTitle: 'Record a Quote',
+        wordPlaceholder: 'Enter a historically significant quote',
+        authorPlaceholder: 'Author (e.g. Socrates)',
+        checkBtn: 'Verify & Format with AI',
+        checking: 'Verifying records...',
+        postNote: 'AI verifies the quote against historical texts, corrects it, and formats it beautifully. Modern casual comments are not allowed.',
         followBtn: 'Follow',
         followingBtn: 'Following',
         aiExp: 'AI Explanation',
         episode: 'Deep Dive Episode',
         originalText: 'Japanese Original',
-        posterMark: 'Posted by',
-        memberNo: 'Member No.',
-        myPosts: 'My Posts',
-        fontGothic: 'Sans-serif',
-        fontMincho: 'Serif',
+        memberNo: 'Scholar No.',
+        myPosts: 'Your Records',
+        fontSetting: 'Font: ',
         langSetting: 'Language: English',
-        authorProfileTitle: 'Author Profile'
+        authorProfileTitle: 'Biography',
+        keywordSearch: ' Search Results',
+        logout: 'Leave'
       }
     };
 
-    // --- Firebase Initialization ---
-    const firebaseConfig = window.__firebase_config ? JSON.parse(window.__firebase_config) : {};
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen-app';
-
     // --- API Helpers ---
     const generateAIContent = async (prompt, schema, customApiKey) => {
-      const apiKey = customApiKey || ""; 
+      const apiKey = customApiKey || (isFirebaseReady ? "" : ""); // In real usage, use env var or user input
+      if (!apiKey) throw new Error("API Key is missing. Please set it in Settings.");
+      
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
       const payload = {
         contents: [{ parts: [{ text: prompt }] }],
@@ -178,74 +185,49 @@
         }
       };
 
-      const fetchWithRetry = async (retries = 3, delay = 1000) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error('API Error');
-            const data = await response.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) throw new Error('No text in response');
-            return JSON.parse(text);
-          } catch (err) {
-            if (i === retries - 1) throw err;
-            await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
-          }
-        }
-      };
-      return fetchWithRetry();
+      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return JSON.parse(text);
     };
 
     const checkWordWithAI = async (content, author, customApiKey) => {
-      const prompt = `以下の言葉が、指定された発言者（偉人、哲学者、有名人など）によって実際に言われたものか、歴史的文献や信頼できる記録に基づいているかを厳密に判定してください。
+      const prompt = `以下の言葉が、指定された発言者によって実際に言われたものか、歴史的文献や信頼できる記録に基づいているかを厳密に判定してください。
 言葉: "${content}"
 発言者: "${author}"
 
 【重要要件】
-1. 「こんにちは」「ありがとう」等の一般的な挨拶や推測の言葉は、名言として記録に残っている固有の言葉ではないため、必ず isValid: false にしてください。
-2. 若干言葉が間違っている場合は、文献に残っている正確な言葉に修正してください。
+1. 一般的な挨拶や推測の言葉は isValid: false にしてください。
+2. 言葉が間違っている場合は、文献に残っている正確な言葉に修正してください。
 3. 詩や名言として美しく読みやすくなるように、日本語と英語の両方において、適切な位置に改行(\\n)を含めてください。
-4. 【言語要件】解説(explanation)とエピソード(episode)は、まず「日本語」で詳細に生成し、その後、それを翻訳機にかけたような自然な「英語」に訳して、それぞれ指定のJSONキーに出力してください。
-
-以下のJSONで回答してください。`;
+4. 【言語要件】解説(explanation)とエピソード(episode)は、まず「日本語」で生成し、その後自然な「英語」に訳してそれぞれ指定のJSONキーに出力してください。`;
 
       const schema = {
         isValid: { type: "BOOLEAN" },
         reason: { type: "STRING" },
         ja_text: { type: "STRING" },
         en_text: { type: "STRING" },
-        estimatedAge_relative: { type: "STRING", description: "例: 約2400年前" },
-        estimatedAge_absolute: { type: "STRING", description: "例: 紀元前400年頃" },
+        estimatedAge_relative: { type: "STRING" },
+        estimatedAge_absolute: { type: "STRING" },
         explanation_ja: { type: "STRING" },
         explanation_en: { type: "STRING" },
         episode_ja: { type: "STRING" },
-        episode_en: { type: "STRING" }
+        episode_en: { type: "STRING" },
+        authorKeywords: { type: "ARRAY", items: { type: "STRING" } }
       };
 
       return generateAIContent(prompt, schema, customApiKey);
     };
 
-    const getAuthorProfileWithAI = async (author, customApiKey) => {
-      const prompt = `発言者「${author}」に関するプロフィール解説と、関連するキーワード（職業、ジャンル、時代など）を生成してください。
-【言語要件】プロフィール解説(description)は、まず「日本語」で生成し、その後「英語」に翻訳して、それぞれ指定のキーに出力してください。キーワードも日本語版と英語版を生成してください。`;
-      
-      const schema = {
-        description_ja: { type: "STRING" },
-        description_en: { type: "STRING" },
-        keywords_ja: { type: "ARRAY", items: { type: "STRING" } },
-        keywords_en: { type: "ARRAY", items: { type: "STRING" } }
-      };
-      return generateAIContent(prompt, schema, customApiKey);
-    };
-
-    // --- Components ---
+    // --- UI Components ---
     const AuthorAvatar = ({ name, size = 'md', onClick }) => {
       const initial = name ? name.charAt(0).toUpperCase() : '?';
-      const sizeClasses = { sm: 'w-8 h-8 text-sm', md: 'w-10 h-10 text-base', lg: 'w-16 h-16 text-2xl' };
+      const sizeClasses = { sm: 'w-8 h-8 text-xs', md: 'w-12 h-12 text-lg', lg: 'w-20 h-20 text-3xl' };
       return (
         <div 
           onClick={(e) => { if(onClick) { e.stopPropagation(); onClick(name); } }}
-          className={`${sizeClasses[size]} rounded-full bg-gray-800 text-white flex items-center justify-center font-bold flex-shrink-0 ${onClick ? 'cursor-pointer hover:bg-gray-700 transition' : ''}`}
+          className={`${sizeClasses[size]} rounded-full bg-[#2C2C2A] text-white flex items-center justify-center font-serif flex-shrink-0 ${onClick ? 'cursor-pointer hover:bg-black transition-colors' : ''} shadow-sm`}
         >
           {initial}
         </div>
@@ -254,13 +236,11 @@
 
     const AgeDisplay = ({ relative, absolute }) => {
       const [showAbsolute, setShowAbsolute] = useState(false);
-      
       if (!relative && !absolute) return null;
-      
       return (
         <span 
           onClick={(e) => { e.stopPropagation(); setShowAbsolute(!showAbsolute); }}
-          className="text-xs font-medium text-gray-500 whitespace-nowrap ml-2 bg-gray-100 px-2.5 py-1 rounded-md cursor-pointer hover:bg-gray-200 transition select-none"
+          className="text-xs font-sans text-[#8C8C85] whitespace-nowrap ml-3 bg-white px-3 py-1 rounded-full border border-[#EAE9E4] cursor-pointer hover:bg-[#F4F3EF] transition-colors select-none"
           title="タップで年代表示を切り替え"
         >
           {showAbsolute ? (absolute || relative) : (relative || absolute)}
@@ -274,103 +254,152 @@
       const [userProfile, setUserProfile] = useState(null);
       const [posts, setPosts] = useState([]);
       
-      const [currentTab, setCurrentTab] = useState('home');
+      const [currentTab, setCurrentTab] = useState('home'); // home, add, profile, settings
       const [activePost, setActivePost] = useState(null);
       const [activeAuthor, setActiveAuthor] = useState(null); 
+      const [activeKeyword, setActiveKeyword] = useState(null);
       
       const [isInitializing, setIsInitializing] = useState(true);
+      const [mockMode, setMockMode] = useState(!isFirebaseReady);
 
+      // Initialization
       useEffect(() => {
+        if (!isFirebaseReady) {
+          // Mock Auth Init
+          setTimeout(() => {
+            setAuthUser({ uid: MOCK_UID });
+            setUserProfile({ username: 'ゲスト識者', userNumber: 9999, followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: '' });
+            setPosts([...globalMockPosts]);
+            setIsInitializing(false);
+          }, 600);
+          return;
+        }
+
+        // Real Firebase Auth
         const initAuth = async () => {
           try {
             if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-              await signInWithCustomToken(auth, window.__initial_auth_token);
+              await auth.signInWithCustomToken(window.__initial_auth_token);
             } else {
-              await signInAnonymously(auth);
+              await auth.signInAnonymously();
             }
           } catch (error) {
             console.error("Auth init failed:", error);
+            // Fallback to mock on error
+            setMockMode(true);
+            setAuthUser({ uid: MOCK_UID });
+            setUserProfile({ username: 'Error Guest', userNumber: 0, fontPreference: 'serif' });
+            setIsInitializing(false);
           }
         };
         initAuth();
 
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
           setAuthUser(user);
           if (!user) setIsInitializing(false);
         });
         return () => unsubscribe();
       }, []);
 
+      // Data Fetching (Real)
       useEffect(() => {
-        if (!authUser) return;
-        const profileRef = doc(db, 'artifacts', appId, 'users', authUser.uid, 'profile', 'data');
-        const unsub = onSnapshot(profileRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data());
-          } else {
-            setUserProfile(null);
-          }
-          setIsInitializing(false);
-        }, (err) => {
-          console.error("Profile fetch error:", err);
+        if (mockMode || !authUser) return;
+        const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data');
+        const unsubP = profileRef.onSnapshot(doc => {
+          setUserProfile(doc.exists ? doc.data() : null);
           setIsInitializing(false);
         });
-        return () => unsub();
-      }, [authUser]);
 
-      useEffect(() => {
-        if (!authUser) return;
-        const postsRef = collection(db, 'artifacts', appId, 'public', 'data', 'posts');
-        const unsub = onSnapshot(postsRef, (snap) => {
+        const postsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts');
+        const unsubPosts = postsRef.onSnapshot(snap => {
           const postsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           postsData.sort((a, b) => b.createdAt - a.createdAt);
           setPosts(postsData);
-        }, (err) => console.error("Posts fetch error:", err));
-        return () => unsub();
-      }, [authUser]);
+        });
 
+        return () => { unsubP(); unsubPosts(); };
+      }, [authUser, mockMode]);
+
+      // Actions
       const toggleLike = async (postId, likedBy) => {
         if (!authUser || !userProfile) return;
         const isLiked = likedBy.includes(authUser.uid);
-        const postRef = doc(db, 'artifacts', appId, 'public', 'data', 'posts', postId);
-        
-        let newLikedBy = [...likedBy];
-        if (isLiked) {
-          newLikedBy = newLikedBy.filter(id => id !== authUser.uid);
+        let newLikedBy = isLiked ? likedBy.filter(id => id !== authUser.uid) : [...likedBy, authUser.uid];
+
+        if (mockMode) {
+          globalMockPosts = globalMockPosts.map(p => p.id === postId ? { ...p, likedBy: newLikedBy, likes: newLikedBy.length } : p);
+          setPosts([...globalMockPosts]);
         } else {
-          newLikedBy.push(authUser.uid);
+          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts').doc(postId).update({ likes: newLikedBy.length, likedBy: newLikedBy });
         }
-        await updateDoc(postRef, { likes: newLikedBy.length, likedBy: newLikedBy });
       };
 
       const toggleFollowAuthor = async (authorName) => {
         if (!authUser || !userProfile) return;
-        const profileRef = doc(db, 'artifacts', appId, 'users', authUser.uid, 'profile', 'data');
-        
         let newFollowing = [...(userProfile.followedAuthors || [])];
         if (newFollowing.includes(authorName)) {
           newFollowing = newFollowing.filter(name => name !== authorName);
         } else {
           newFollowing.push(authorName);
         }
-        await updateDoc(profileRef, { followedAuthors: newFollowing });
+
+        if (mockMode) {
+          setUserProfile({ ...userProfile, followedAuthors: newFollowing });
+        } else {
+          await db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').update({ followedAuthors: newFollowing });
+        }
       };
 
       const updateProfile = async (updates) => {
         if (!authUser) return;
-        const profileRef = doc(db, 'artifacts', appId, 'users', authUser.uid, 'profile', 'data');
-        await updateDoc(profileRef, updates);
+        if (mockMode) {
+          setUserProfile({ ...userProfile, ...updates });
+        } else {
+          await db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').update(updates);
+        }
+      };
+
+      const addPost = async (postData) => {
+        if (mockMode) {
+          const newPost = { ...postData, id: 'm' + Date.now() };
+          globalMockPosts = [newPost, ...globalMockPosts];
+          setPosts([...globalMockPosts]);
+        } else {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts').add(postData);
+        }
+      };
+
+      const handleLogout = async () => {
+        if (!mockMode) await auth.signOut();
+        setAuthUser(null);
+        setUserProfile(null);
+        setIsInitializing(false);
       };
 
       if (isInitializing) {
-        return <div className="flex items-center justify-center h-screen bg-gray-50"><Loader2 className="w-8 h-8 text-gray-500" /></div>;
+        return (
+          <div className="flex flex-col items-center justify-center h-screen bg-[#FDFDFB]">
+             <span className="text-2xl font-serif tracking-[0.3em] text-[#2C2C2A] animate-pulse">KINGEN</span>
+          </div>
+        );
       }
 
-      const fontClass = userProfile?.fontPreference === 'serif' ? 'font-serif' : 'font-sans';
+      const fontClass = userProfile?.fontPreference === 'sans' ? 'font-sans' : 'font-serif';
       const lang = userProfile?.appLanguage || 'ja';
       const t = i18n[lang];
 
       const renderScreen = () => {
+        if (activeKeyword) {
+          return (
+            <KeywordScreen 
+              keyword={activeKeyword} 
+              posts={posts} 
+              onBack={() => setActiveKeyword(null)} 
+              onAuthorClick={setActiveAuthor} 
+              t={t} 
+            />
+          );
+        }
         if (activeAuthor) {
           return (
             <AuthorProfileScreen 
@@ -381,6 +410,8 @@
               onPostClick={(p) => { setActivePost(p); setActiveAuthor(null); }}
               onFollow={() => toggleFollowAuthor(activeAuthor)}
               isFollowing={(userProfile?.followedAuthors || []).includes(activeAuthor)}
+              onKeywordClick={setActiveKeyword}
+              mockMode={mockMode}
               t={t}
               lang={lang}
             />
@@ -406,100 +437,105 @@
           case 'home':
             return <HomeScreen posts={posts} userProfile={userProfile} onPostClick={setActivePost} onLike={(p) => toggleLike(p.id, p.likedBy || [])} currentUserId={authUser.uid} onAuthorClick={setActiveAuthor} t={t} lang={lang} />;
           case 'add':
-            return <CreatePostScreen onSuccess={() => setCurrentTab('home')} userProfile={userProfile} currentUserId={authUser.uid} t={t} />;
+            return <CreatePostScreen onSuccess={() => setCurrentTab('home')} userProfile={userProfile} currentUserId={authUser.uid} onAddPost={addPost} t={t} />;
           case 'profile':
-            return <ProfileScreen userProfile={userProfile} posts={posts.filter(p => p.postedByUid === authUser.uid)} onPostClick={setActivePost} onUpdateProfile={updateProfile} t={t} lang={lang} />;
+            return <ProfileScreen userProfile={userProfile} posts={posts.filter(p => p.postedByUid === authUser.uid)} onPostClick={setActivePost} t={t} lang={lang} />;
+          case 'settings':
+            return <SettingsScreen userProfile={userProfile} onUpdateProfile={updateProfile} onLogout={handleLogout} t={t} />;
           default: return null;
         }
       };
 
-      return (
-        <div className={`max-w-md mx-auto h-screen bg-gray-50 flex flex-col relative shadow-2xl overflow-hidden ${fontClass} text-gray-900`}>
-          {!userProfile ? (
-            <LoginScreen authUser={authUser} t={t} />
-          ) : (
-            <>
-              <div className="flex-1 overflow-y-auto pb-16 relative">
-                {renderScreen()}
-              </div>
+      const NavItem = ({ tab, icon: IconComponent, label }) => (
+        <button 
+          onClick={() => { setCurrentTab(tab); setActivePost(null); setActiveAuthor(null); setActiveKeyword(null); }} 
+          className={`flex md:flex-row flex-col items-center gap-0 md:gap-4 p-3 md:p-4 w-full md:justify-start justify-center transition-all duration-300 rounded-xl
+            ${currentTab === tab && !activePost && !activeAuthor && !activeKeyword ? 'text-[#2C2C2A] bg-[#F4F3EF]' : 'text-[#8C8C85] hover:bg-[#F4F3EF]/50 hover:text-[#2C2C2A]'}`}
+        >
+          <IconComponent className="w-6 h-6 md:w-5 md:h-5" />
+          <span className="text-[10px] md:text-[15px] font-bold tracking-wider mt-1 md:mt-0">{label}</span>
+        </button>
+      );
 
-              {(!activePost && !activeAuthor) && (
-                <div className="absolute bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 px-4 z-50">
-                  <button onClick={() => setCurrentTab('home')} className={`p-2 flex flex-col items-center transition-colors ${currentTab === 'home' ? 'text-black' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <Home className="w-6 h-6" />
-                    <span className="text-[10px] mt-1">{t.home}</span>
-                  </button>
-                  <button onClick={() => setCurrentTab('add')} className={`p-2 flex flex-col items-center transition-colors ${currentTab === 'add' ? 'text-black' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <PlusCircle className="w-8 h-8" />
-                  </button>
-                  <button onClick={() => setCurrentTab('profile')} className={`p-2 flex flex-col items-center transition-colors ${currentTab === 'profile' ? 'text-black' : 'text-gray-400 hover:text-gray-600'}`}>
-                    <User className="w-6 h-6" />
-                    <span className="text-[10px] mt-1">{t.mypage}</span>
-                  </button>
+      return (
+        <div className={`min-h-screen bg-[#EAE9E4] text-[#2C2C2A] flex justify-center ${fontClass}`}>
+          {!userProfile ? (
+            <LoginScreen authUser={authUser} mockMode={mockMode} onLogin={(name) => {
+              if(mockMode) setUserProfile({ username: name, userNumber: Math.floor(1000+Math.random()*9000), fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: '' });
+              else {
+                db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data').set({
+                  username: name, userNumber: Math.floor(1000+Math.random()*9000), followedAuthors: [], fontPreference: 'serif', appLanguage: 'ja', geminiApiKey: ''
+                });
+              }
+            }} t={t} />
+          ) : (
+            <div className="w-full max-w-[1200px] flex relative bg-[var(--bg-color)] shadow-2xl shadow-black/5">
+              
+              {/* Desktop Left Sidebar */}
+              <nav className="hidden md:flex flex-col w-64 h-screen sticky top-0 border-r border-[var(--border-color)] pt-12 pb-8 px-4 justify-between bg-white/50">
+                <div>
+                  <h1 className="text-3xl font-serif font-bold tracking-[0.2em] mb-12 px-4 text-[#2C2C2A]">KINGEN</h1>
+                  <div className="space-y-2">
+                    <NavItem tab="home" icon={HomeIcon} label={t.home} />
+                    <NavItem tab="add" icon={PenIcon} label={t.add} />
+                    <NavItem tab="profile" icon={BookIcon} label={t.mypage} />
+                  </div>
                 </div>
-              )}
-            </>
+                <div>
+                   <NavItem tab="settings" icon={SettingsIcon} label={t.settings} />
+                </div>
+              </nav>
+
+              {/* Main Content Area */}
+              <main className="flex-1 max-w-[650px] min-h-screen border-r-0 lg:border-r border-[var(--border-color)] relative pb-20 md:pb-0 overflow-y-auto bg-white/40">
+                 {renderScreen()}
+              </main>
+
+              {/* Desktop Right Sidebar (Discover / Trend placeholder) */}
+              <aside className="hidden lg:block w-[320px] h-screen sticky top-0 pt-12 px-8 bg-white/30">
+                <div className="bg-white p-6 rounded-2xl border border-[var(--border-color)] shadow-sm animate-fade-up delay-200">
+                  <h3 className="font-bold text-sm tracking-widest text-[#8C8C85] mb-4 uppercase">Concept</h3>
+                  <p className="text-sm leading-loose text-[#2C2C2A]">
+                    {t.subtitle}<br/><br/>
+                    {mockMode && <span className="text-amber-600 bg-amber-50 px-2 py-1 rounded text-xs">{t.demoModeInfo}</span>}
+                  </p>
+                </div>
+              </aside>
+
+              {/* Mobile Bottom Nav */}
+              <nav className="md:hidden fixed bottom-0 w-full bg-[#FDFDFB]/95 backdrop-blur-lg border-t border-[var(--border-color)] flex justify-around p-2 z-50 pb-safe">
+                 <NavItem tab="home" icon={HomeIcon} label={t.home} />
+                 <NavItem tab="add" icon={PenIcon} label={t.add} />
+                 <NavItem tab="profile" icon={BookIcon} label={t.mypage} />
+                 <NavItem tab="settings" icon={SettingsIcon} label={t.settings} />
+              </nav>
+            </div>
           )}
         </div>
       );
     }
 
     // ==========================================
-    // Sub Screens
+    // Screens
     // ==========================================
 
-    function LoginScreen({ authUser, t }) {
+    function LoginScreen({ authUser, mockMode, onLogin, t }) {
       const [username, setUsername] = useState('');
-      const [password, setPassword] = useState('');
-      const [loading, setLoading] = useState(false);
-      const [isLoginMode, setIsLoginMode] = useState(false);
-
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!username.trim() || !authUser) return;
-        setLoading(true);
-        try {
-          const profileRef = doc(db, 'artifacts', appId, 'users', authUser.uid, 'profile', 'data');
-          const docSnap = await getDoc(profileRef);
-          if (!docSnap.exists()) {
-            await setDoc(profileRef, {
-              username: username.trim(),
-              userNumber: Math.floor(1000 + Math.random() * 9000),
-              followedAuthors: [],
-              fontPreference: 'sans',
-              appLanguage: 'ja',
-              geminiApiKey: ''
-            });
-          }
-        } catch (error) {
-          console.error(error);
-          alert("Error");
-        } finally {
-          setLoading(false);
-        }
-      };
-
+      
       return (
-        <div className="flex flex-col items-center justify-center h-full p-6 bg-white">
-          <h1 className="text-4xl font-serif font-bold tracking-widest mb-2">{t.appName}</h1>
-          <p className="text-gray-500 text-sm mb-10 text-center">{t.subtitle}</p>
+        <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto h-screen p-8 bg-[var(--bg-color)] shadow-xl animate-fade-up">
+          <h1 className="text-5xl font-serif font-bold tracking-[0.2em] mb-4 text-[#2C2C2A]">KINGEN</h1>
+          <p className="text-[#8C8C85] text-sm mb-12 text-center tracking-widest">{t.subtitle}</p>
           
-          <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if(username.trim()) onLogin(username.trim()); }} className="w-full space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.loginId}</label>
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 outline-none transition" required />
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-transparent border-b-2 border-[#EAE9E4] focus:border-[#2C2C2A] outline-none transition-colors text-center text-lg placeholder-[#C4C3BE]" placeholder="あなたの名前" required />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.password}</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 outline-none transition" required />
-            </div>
-            <button type="submit" disabled={loading} className="w-full bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition flex justify-center items-center mt-6">
-              {loading ? <Loader2 className="w-5 h-5 text-white" /> : (isLoginMode ? t.loginBtn : t.registerBtn)}
+            <button type="submit" className="w-full bg-[#2C2C2A] text-white py-4 rounded-xl font-bold tracking-widest hover:bg-black transition-all active:scale-[0.98] shadow-lg shadow-black/10">
+              {t.loginBtn}
             </button>
           </form>
-          <button onClick={() => setIsLoginMode(!isLoginMode)} className="mt-6 text-sm text-gray-500 hover:text-black underline">
-            {isLoginMode ? t.noAccount : t.hasAccount}
-          </button>
+          {mockMode && <p className="mt-8 text-xs text-amber-600">{t.demoModeInfo}</p>}
         </div>
       );
     }
@@ -508,47 +544,41 @@
       const [subTab, setSubTab] = useState('recommend');
 
       const displayPosts = useMemo(() => {
-        if (subTab === 'recommend') {
-          return [...posts].sort((a, b) => {
-            if (b.likes !== a.likes) return b.likes - a.likes;
-            return b.createdAt - a.createdAt;
-          });
-        } else {
-          const followed = userProfile?.followedAuthors || [];
-          return posts.filter(p => followed.includes(p.author)).sort((a, b) => b.createdAt - a.createdAt);
-        }
+        if (subTab === 'recommend') return [...posts].sort((a, b) => b.createdAt - a.createdAt);
+        const followed = userProfile?.followedAuthors || [];
+        return posts.filter(p => followed.includes(p.author)).sort((a, b) => b.createdAt - a.createdAt);
       }, [posts, subTab, userProfile]);
 
       return (
-        <div className="flex flex-col min-h-full bg-white">
-          <div className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-gray-100 flex px-4 pt-4 pb-2">
-            <button onClick={() => setSubTab('recommend')} className={`flex-1 text-center pb-2 font-medium transition-colors border-b-2 ${subTab === 'recommend' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{t.recommend}</button>
-            <button onClick={() => setSubTab('following')} className={`flex-1 text-center pb-2 font-medium transition-colors border-b-2 ${subTab === 'following' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{t.following}</button>
+        <div className="flex flex-col min-h-full animate-fade-up">
+          <div className="sticky top-0 bg-[#FDFDFB]/80 backdrop-blur-xl z-10 border-b border-[var(--border-color)] flex px-6 pt-6 pb-0">
+            <button onClick={() => setSubTab('recommend')} className={`flex-1 text-center pb-4 text-sm tracking-widest transition-all border-b-2 ${subTab === 'recommend' ? 'border-[#2C2C2A] text-[#2C2C2A] font-bold' : 'border-transparent text-[#8C8C85] hover:text-[#2C2C2A]'}`}>{t.recommend}</button>
+            <button onClick={() => setSubTab('following')} className={`flex-1 text-center pb-4 text-sm tracking-widest transition-all border-b-2 ${subTab === 'following' ? 'border-[#2C2C2A] text-[#2C2C2A] font-bold' : 'border-transparent text-[#8C8C85] hover:text-[#2C2C2A]'}`}>{t.following}</button>
           </div>
 
           <div className="flex-1 p-0">
             {displayPosts.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 mt-10">{t.noPosts}</div>
+              <div className="p-12 text-center text-[#8C8C85] tracking-widest">{t.noPosts}</div>
             ) : (
-              displayPosts.map(post => {
+              displayPosts.map((post, idx) => {
                 const mainText = lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content);
                 return (
-                  <div key={post.id} className="border-b border-gray-100 p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => onPostClick(post)}>
-                    <div className="flex items-start gap-3">
+                  <div key={post.id} className="border-b border-[var(--border-color)] p-8 hover:bg-[#F4F3EF]/30 transition-colors cursor-pointer group animate-fade-up" style={{animationDelay: `${idx*50}ms`}} onClick={() => onPostClick(post)}>
+                    <div className="flex items-start gap-5">
                       <AuthorAvatar name={post.author} onClick={onAuthorClick} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <h3 className="font-bold text-gray-900 truncate hover:underline" onClick={(e) => { e.stopPropagation(); onAuthorClick(post.author); }}>
+                      <div className="flex-1 min-w-0 pt-1">
+                        <div className="flex items-baseline justify-between mb-4">
+                          <h3 className="font-bold text-[#2C2C2A] text-lg hover:underline decoration-[#EAE9E4] underline-offset-4" onClick={(e) => { e.stopPropagation(); onAuthorClick(post.author); }}>
                             {post.author}
                           </h3>
                           <AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} />
                         </div>
-                        <p className="text-gray-800 whitespace-pre-wrap leading-relaxed text-[16px]">{mainText}</p>
+                        <p className="text-[#2C2C2A] whitespace-pre-wrap leading-[2.2] text-[17px]">{mainText}</p>
                         
-                        <div className="flex items-center justify-end mt-4 gap-4">
-                          <button onClick={(e) => { e.stopPropagation(); onLike(post); }} className="flex items-center gap-1.5 group">
-                            <Heart className={`w-5 h-5 transition-colors ${(post.likedBy || []).includes(currentUserId) ? 'fill-red-500 text-red-500' : 'text-gray-400 group-hover:text-red-400'}`} />
-                            <span className={`text-sm ${(post.likedBy || []).includes(currentUserId) ? 'text-red-500' : 'text-gray-500'}`}>{post.likes || 0}</span>
+                        <div className="flex items-center justify-end mt-6 gap-4 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button onClick={(e) => { e.stopPropagation(); onLike(post); }} className="flex items-center gap-2 group/btn">
+                            <HeartIcon className={`w-5 h-5 transition-transform group-hover/btn:scale-110 ${(post.likedBy || []).includes(currentUserId) ? 'fill-red-500 text-red-500' : 'text-[#8C8C85]'}`} />
+                            <span className={`text-sm font-sans ${(post.likedBy || []).includes(currentUserId) ? 'text-red-500 font-bold' : 'text-[#8C8C85]'}`}>{post.likes || 0}</span>
                           </button>
                         </div>
                       </div>
@@ -564,78 +594,65 @@
 
     function PostDetailScreen({ post, onBack, userProfile, onLike, isLiked, onFollow, isFollowing, onAuthorClick, t, lang }) {
       if (!post) return null;
-
       const mainText = lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content);
       const subText = lang === 'ja' ? post.en_text : post.ja_text;
-      
       const explanation = lang === 'ja' ? (post.explanation_ja || post.explanation) : (post.explanation_en || post.explanation);
       const episode = lang === 'ja' ? (post.episode_ja || post.episode) : (post.episode_en || post.episode);
 
       return (
-        <div className="flex flex-col min-h-full bg-white transition-all duration-200">
-          <div className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-gray-100 px-2 py-3 flex items-center">
-            <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition"><ChevronLeft className="w-6 h-6" /></button>
-            <span className="font-bold ml-2">{t.home}</span>
+        <div className="flex flex-col min-h-full animate-fade-up bg-[var(--bg-color)] z-20 absolute inset-0">
+          <div className="sticky top-0 bg-[#FDFDFB]/80 backdrop-blur-xl z-10 border-b border-[var(--border-color)] px-4 py-4 flex items-center">
+            <button onClick={onBack} className="p-2 hover:bg-[#F4F3EF] rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 text-[#2C2C2A]" /></button>
           </div>
 
-          <div className="p-5 flex-1 pb-10">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onAuthorClick(post.author)}>
+          <div className="p-8 md:p-12 flex-1 pb-24">
+            <div className="flex items-center justify-between mb-12">
+              <div className="flex items-center gap-5 cursor-pointer group" onClick={() => onAuthorClick(post.author)}>
                 <AuthorAvatar name={post.author} size="lg" />
                 <div>
-                  <h2 className="font-bold text-2xl group-hover:underline">{post.author}</h2>
-                  <div className="mt-1">
-                    <AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} />
-                  </div>
+                  <h2 className="font-bold text-3xl text-[#2C2C2A] group-hover:underline underline-offset-8 decoration-[#EAE9E4]">{post.author}</h2>
+                  <div className="mt-2"><AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} /></div>
                 </div>
               </div>
-              <button onClick={onFollow} className={`px-4 py-1.5 rounded-full text-sm font-bold border transition ${isFollowing ? 'bg-white text-black border-gray-300' : 'bg-black text-white border-black'}`}>
+              <button onClick={onFollow} className={`px-5 py-2 rounded-full text-sm font-bold tracking-widest border transition-all ${isFollowing ? 'bg-transparent text-[#8C8C85] border-[#EAE9E4]' : 'bg-[#2C2C2A] text-white border-[#2C2C2A] shadow-md hover:bg-black'}`}>
                 {isFollowing ? t.followingBtn : t.followBtn}
               </button>
             </div>
 
-            <div className="mb-10">
-              <p className="text-2xl md:text-3xl leading-loose font-medium text-gray-900 whitespace-pre-wrap">{mainText}</p>
+            <div className="mb-16">
+              <p className="text-3xl md:text-4xl leading-[2.2] font-medium text-[#2C2C2A] whitespace-pre-wrap">{mainText}</p>
               {subText && (
-                <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-xs font-bold text-gray-400 mb-2 block uppercase tracking-wider">{t.originalText}</span>
-                  <p className="text-sm md:text-base text-gray-600 whitespace-pre-wrap leading-relaxed">{subText}</p>
+                <div className="mt-10 pt-8 border-t border-[var(--border-color)]">
+                  <span className="text-xs font-bold text-[#8C8C85] mb-4 block uppercase tracking-[0.2em]">{t.originalText}</span>
+                  <p className="text-lg md:text-xl text-[#5C5C5A] whitespace-pre-wrap leading-[2.0]">{subText}</p>
                 </div>
               )}
             </div>
 
-            <div className="space-y-4 mb-8">
+            <div className="space-y-6 mb-16">
               {explanation && (
-                <div className="bg-blue-50/50 rounded-xl p-5 border border-blue-100/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bot className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-bold text-blue-900">{t.aiExp}</span>
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{explanation}</p>
+                <div className="bg-white rounded-2xl p-8 border border-[var(--border-color)] shadow-sm">
+                  <div className="flex items-center gap-3 mb-4"><BotIcon className="w-5 h-5 text-[#8C8C85]" /><span className="text-sm font-bold tracking-widest text-[#2C2C2A]">{t.aiExp}</span></div>
+                  <p className="text-[15px] text-[#2C2C2A] leading-loose whitespace-pre-wrap">{explanation}</p>
                 </div>
               )}
-
               {episode && (
-                <div className="bg-amber-50/50 rounded-xl p-5 border border-amber-100/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BookOpen className="w-5 h-5 text-amber-600" />
-                    <span className="text-sm font-bold text-amber-900">{t.episode}</span>
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{episode}</p>
+                <div className="bg-white rounded-2xl p-8 border border-[var(--border-color)] shadow-sm">
+                  <div className="flex items-center gap-3 mb-4"><BookIcon className="w-5 h-5 text-[#8C8C85]" /><span className="text-sm font-bold tracking-widest text-[#2C2C2A]">{t.episode}</span></div>
+                  <p className="text-[15px] text-[#2C2C2A] leading-loose whitespace-pre-wrap">{episode}</p>
                 </div>
               )}
             </div>
 
-            <div className="flex items-end justify-between mt-8 pt-6 border-t border-gray-100">
-              <button onClick={onLike} className="flex items-center gap-2 group">
-                 <Heart className={`w-8 h-8 transition-colors ${isLiked ? 'fill-red-500 text-red-500' : 'text-gray-300 group-hover:text-red-400'}`} />
-                 <span className={`font-bold text-lg ${isLiked ? 'text-red-500' : 'text-gray-400'}`}>{post.likes || 0}</span>
+            <div className="flex items-end justify-between mt-12 pt-8 border-t border-[var(--border-color)]">
+              <button onClick={onLike} className="flex items-center gap-3 group">
+                 <HeartIcon className={`w-8 h-8 transition-transform group-hover:scale-110 ${isLiked ? 'fill-red-500 text-red-500' : 'text-[#C4C3BE]'}`} />
+                 <span className={`font-sans font-bold text-xl ${isLiked ? 'text-red-500' : 'text-[#8C8C85]'}`}>{post.likes || 0}</span>
               </button>
               
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-gray-400">{t.posterMark}</span>
-                <div className="bg-gray-100 text-gray-600 px-3 py-1 rounded-md text-xs font-bold font-sans">
-                  No. {post.postedByUserNumber}
+              <div className="flex flex-col items-end gap-2">
+                <div className="bg-white text-[#8C8C85] px-4 py-2 rounded-lg text-xs font-sans border border-[var(--border-color)] tracking-wider shadow-sm">
+                  {t.memberNo} : <span className="font-bold text-[#2C2C2A]">{post.postedByUserNumber}</span>
                 </div>
               </div>
             </div>
@@ -644,7 +661,7 @@
       );
     }
 
-    function AuthorProfileScreen({ authorName, posts, onBack, userProfile, onPostClick, onFollow, isFollowing, t, lang }) {
+    function AuthorProfileScreen({ authorName, posts, onBack, userProfile, onPostClick, onFollow, isFollowing, onKeywordClick, mockMode, t, lang }) {
       const [authorInfo, setAuthorInfo] = useState(null);
       const [loading, setLoading] = useState(true);
 
@@ -652,90 +669,118 @@
         const fetchInfo = async () => {
           setLoading(true);
           try {
-            // Firestoreに保存されているプロフィールを取得
-            const authorRef = doc(db, 'artifacts', appId, 'public', 'data', 'authors', authorName);
-            const docSnap = await getDoc(authorRef);
-            
-            if (docSnap.exists()) {
-              setAuthorInfo(docSnap.data());
+            if (mockMode) {
+              const mockA = globalMockAuthors.find(a => a.name === authorName);
+              setAuthorInfo(mockA || { description_ja: "プロフィール情報がありません。", keywords_ja: [] });
             } else {
-              setAuthorInfo({ description_ja: "プロフィール情報がありません。", keywords_ja: [] });
+              const authorRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('authors').doc(authorName);
+              const docSnap = await authorRef.get();
+              setAuthorInfo(docSnap.exists ? docSnap.data() : { description_ja: "プロフィール情報がありません。", keywords_ja: [] });
             }
-          } catch (err) {
-            console.error("Failed to fetch author profile", err);
-          } finally {
-            setLoading(false);
-          }
+          } catch (err) { console.error(err); } finally { setLoading(false); }
         };
         fetchInfo();
-      }, [authorName]);
+      }, [authorName, mockMode]);
 
       const description = lang === 'ja' ? (authorInfo?.description_ja) : (authorInfo?.description_en || authorInfo?.description_ja);
       const keywords = lang === 'ja' ? (authorInfo?.keywords_ja || []) : (authorInfo?.keywords_en || authorInfo?.keywords_ja || []);
 
       return (
-        <div className="flex flex-col min-h-full bg-white transition-all duration-200 z-20 absolute inset-0">
-          <div className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-gray-100 px-2 py-3 flex items-center">
-            <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition"><ChevronLeft className="w-6 h-6" /></button>
-            <span className="font-bold ml-2">{t.authorProfileTitle}</span>
+        <div className="flex flex-col min-h-full bg-[var(--bg-color)] animate-fade-up z-20 absolute inset-0">
+          <div className="sticky top-0 bg-[#FDFDFB]/80 backdrop-blur-xl z-10 border-b border-[var(--border-color)] px-4 py-4 flex items-center">
+            <button onClick={onBack} className="p-2 hover:bg-[#F4F3EF] rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 text-[#2C2C2A]" /></button>
+            <span className="font-bold tracking-widest ml-4 text-sm">{t.authorProfileTitle}</span>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="bg-gray-900 text-white p-8 flex flex-col items-center text-center">
+            <div className="bg-[#2C2C2A] text-[#FDFDFB] p-12 flex flex-col items-center text-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')]"></div>
               <AuthorAvatar name={authorName} size="lg" />
-              <h2 className="text-3xl font-bold mt-4 mb-3">{authorName}</h2>
+              <h2 className="text-4xl font-bold mt-6 mb-8 tracking-wider z-10">{authorName}</h2>
               
-              <div className="flex flex-wrap justify-center gap-2 mb-6">
+              <div className="flex flex-wrap justify-center gap-3 mb-10 z-10">
                 {keywords.map((kw, i) => (
-                  <span key={i} className="px-3 py-1 bg-white/10 rounded-full text-xs font-medium border border-white/20">{kw}</span>
+                  <button key={i} onClick={() => onKeywordClick(kw)} className="px-4 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-xs font-sans tracking-widest border border-white/20 transition-colors backdrop-blur-sm">
+                    #{kw}
+                  </button>
                 ))}
               </div>
 
-              <button onClick={onFollow} className={`px-8 py-2 rounded-full text-sm font-bold border transition ${isFollowing ? 'bg-white text-black border-transparent' : 'bg-transparent text-white border-white hover:bg-white/10'}`}>
+              <button onClick={onFollow} className={`px-10 py-3 rounded-full text-sm font-bold tracking-widest transition-all z-10 ${isFollowing ? 'bg-white/20 text-white' : 'bg-[#FDFDFB] text-[#2C2C2A] hover:bg-gray-200 shadow-lg'}`}>
                 {isFollowing ? t.followingBtn : t.followBtn}
               </button>
             </div>
 
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="p-8 md:p-12 border-b border-[var(--border-color)] bg-white">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-6 text-gray-400 space-y-3">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
+                <div className="flex justify-center py-10"><LoaderIcon className="w-8 h-8 text-[#EAE9E4]" /></div>
               ) : (
-                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{description}</p>
+                <p className="text-[16px] text-[#2C2C2A] leading-loose whitespace-pre-wrap">{description}</p>
               )}
             </div>
 
             <div className="p-0">
-              <div className="px-5 py-4 font-bold border-b border-gray-100 bg-white sticky top-0">
-                Posts ({posts.length})
+              <div className="px-8 py-6 font-bold tracking-widest text-[#8C8C85] border-b border-[var(--border-color)] bg-[var(--bg-color)] sticky top-0 uppercase text-xs">
+                Records ({posts.length})
               </div>
-              {posts.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">{t.noPosts}</div>
-              ) : (
-                posts.sort((a, b) => b.createdAt - a.createdAt).map(post => {
-                   const mainText = lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content);
-                   return (
-                    <div key={post.id} className="border-b border-gray-100 p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => onPostClick(post)}>
-                      <p className="text-gray-800 whitespace-pre-wrap leading-relaxed text-[16px] mb-3">{mainText}</p>
-                      <div className="flex items-center justify-between">
-                        <AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} />
-                        <div className="flex items-center gap-1">
-                          <Heart className="w-4 h-4 text-red-500 fill-red-500" />
-                          <span className="text-xs text-gray-500 font-medium">{post.likes || 0}</span>
-                        </div>
+              {posts.map(post => {
+                 const mainText = lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content);
+                 return (
+                  <div key={post.id} className="border-b border-[var(--border-color)] p-8 hover:bg-white transition-colors cursor-pointer" onClick={() => onPostClick(post)}>
+                    <p className="text-[#2C2C2A] whitespace-pre-wrap leading-[2.0] text-[16px] mb-6">{mainText}</p>
+                    <div className="flex items-center justify-between">
+                      <AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} />
+                      <div className="flex items-center gap-2">
+                        <HeartIcon className="w-4 h-4 text-red-500 fill-red-500" />
+                        <span className="text-xs font-sans font-bold text-[#8C8C85]">{post.likes || 0}</span>
                       </div>
                     </div>
-                  );
-                })
-              )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       );
     }
 
-    function CreatePostScreen({ onSuccess, userProfile, currentUserId, t }) {
+    function KeywordScreen({ keyword, posts, onBack, onAuthorClick, t }) {
+      // 取得済みのpostsから、指定キーワードを持つ著者（Author）を抽出する
+      const authorsList = useMemo(() => {
+        const authorSet = new Set();
+        posts.forEach(p => {
+          if (p.authorKeywords && p.authorKeywords.includes(keyword)) {
+            authorSet.add(p.author);
+          }
+        });
+        return Array.from(authorSet);
+      }, [keyword, posts]);
+
+      return (
+        <div className="flex flex-col min-h-full bg-[var(--bg-color)] animate-fade-up z-20 absolute inset-0">
+          <div className="sticky top-0 bg-[#FDFDFB]/80 backdrop-blur-xl z-10 border-b border-[var(--border-color)] px-4 py-4 flex items-center">
+            <button onClick={onBack} className="p-2 hover:bg-[#F4F3EF] rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 text-[#2C2C2A]" /></button>
+            <span className="font-bold tracking-widest ml-4 text-sm">#{keyword} {t.keywordSearch}</span>
+          </div>
+          <div className="flex-1 p-6">
+            {authorsList.length === 0 ? (
+              <div className="p-12 text-center text-[#8C8C85] tracking-widest">該当する記録が見つかりません。</div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {authorsList.map(authorName => (
+                  <div key={authorName} onClick={() => onAuthorClick(authorName)} className="bg-white p-6 rounded-2xl border border-[var(--border-color)] shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col items-center text-center gap-4 group">
+                    <AuthorAvatar name={authorName} size="md" />
+                    <span className="font-bold text-sm tracking-wide group-hover:underline decoration-[#EAE9E4] underline-offset-4">{authorName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function CreatePostScreen({ onSuccess, userProfile, currentUserId, onAddPost, t }) {
       const [content, setContent] = useState('');
       const [author, setAuthor] = useState('');
       const [isChecking, setIsChecking] = useState(false);
@@ -747,27 +792,11 @@
         setErrorMsg('');
 
         try {
+          // AI判定
           const result = await checkWordWithAI(content, author, userProfile?.geminiApiKey);
           
           if (result.isValid) {
-            // --- 著者が初登場かチェックし、いなければプロフィールを生成・保存 ---
             const cleanAuthor = author.trim();
-            const authorRef = doc(db, 'artifacts', appId, 'public', 'data', 'authors', cleanAuthor);
-            const authorSnap = await getDoc(authorRef);
-            
-            if (!authorSnap.exists()) {
-               const profileRes = await getAuthorProfileWithAI(cleanAuthor, userProfile?.geminiApiKey);
-               await setDoc(authorRef, {
-                 name: cleanAuthor,
-                 description_ja: profileRes.description_ja || "",
-                 description_en: profileRes.description_en || "",
-                 keywords_ja: profileRes.keywords_ja || [],
-                 keywords_en: profileRes.keywords_en || [],
-                 createdAt: Date.now()
-               });
-            }
-
-            // --- 投稿の保存 ---
             const postData = {
               content: content.trim(),
               author: cleanAuthor,
@@ -779,6 +808,7 @@
               explanation_en: result.explanation_en || "",
               episode_ja: result.episode_ja || "",
               episode_en: result.episode_en || "",
+              authorKeywords: result.authorKeywords || [],
               postedByUid: currentUserId,
               postedByUserNumber: userProfile.userNumber,
               createdAt: Date.now(),
@@ -786,50 +816,48 @@
               likedBy: []
             };
             
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'posts'), postData);
+            await onAddPost(postData);
             onSuccess();
           } else {
-            setErrorMsg(`判定エラー: ${result.reason || '名言として確認できませんでした。'}`);
+            setErrorMsg(`判定不可: ${result.reason || '歴史的記録として確認できませんでした。'}`);
           }
         } catch (err) {
           console.error(err);
-          setErrorMsg('通信エラーが発生しました。時間を置いて再試行してください。');
+          setErrorMsg(err.message || '通信エラーが発生しました。設定でAPIキーを確認してください。');
         } finally {
           setIsChecking(false);
         }
       };
 
       return (
-        <div className="p-5 h-full flex flex-col bg-white">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">{t.postTitle}</h2>
+        <div className="p-8 md:p-12 h-full flex flex-col bg-[var(--bg-color)] animate-fade-up">
+          <div className="mb-10">
+            <h2 className="text-3xl font-bold tracking-widest text-[#2C2C2A]">{t.postTitle}</h2>
           </div>
 
-          <div className="flex-1 flex flex-col gap-6">
+          <div className="flex-1 flex flex-col gap-8">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">{t.wordLabel}</label>
-              <textarea value={content} onChange={(e) => setContent(e.target.value)} className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none resize-none text-lg" placeholder={t.wordPlaceholder} disabled={isChecking} />
+              <textarea value={content} onChange={(e) => setContent(e.target.value)} className="w-full h-40 p-6 bg-white border border-[var(--border-color)] rounded-2xl focus:border-[#2C2C2A] focus:ring-1 focus:ring-[#2C2C2A] outline-none resize-none text-xl leading-loose shadow-sm placeholder-[#C4C3BE] transition-all" placeholder={t.wordPlaceholder} disabled={isChecking} />
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">{t.authorLabel}</label>
-              <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black outline-none text-lg" placeholder={t.authorPlaceholder} disabled={isChecking} />
+              <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full p-5 bg-white border border-[var(--border-color)] rounded-xl focus:border-[#2C2C2A] focus:ring-1 focus:ring-[#2C2C2A] outline-none text-lg shadow-sm placeholder-[#C4C3BE] transition-all" placeholder={t.authorPlaceholder} disabled={isChecking} />
             </div>
 
             {errorMsg && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm flex items-start gap-3 border border-red-100">
-                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <span className="whitespace-pre-wrap">{errorMsg}</span>
+              <div className="bg-red-50 text-red-700 p-5 rounded-xl text-sm flex items-start gap-3 border border-red-100 animate-fade-up">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span className="whitespace-pre-wrap leading-relaxed">{errorMsg}</span>
               </div>
             )}
 
-            <div className="mt-auto mb-4">
-              <div className="bg-blue-50/50 text-blue-800 p-4 rounded-xl text-xs mb-4 flex items-start gap-3 border border-blue-100/50">
-                <Info className="w-5 h-5 flex-shrink-0" />
-                <p className="leading-relaxed">{t.postNote}</p>
+            <div className="mt-auto pt-8">
+              <div className="bg-[#F4F3EF] text-[#5C5C5A] p-5 rounded-xl text-[13px] mb-6 flex items-start gap-3 shadow-inner">
+                <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="leading-loose tracking-wide">{t.postNote}</p>
               </div>
-              <button onClick={handlePost} disabled={isChecking || !content.trim() || !author.trim()} className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-sm ${isChecking ? 'bg-gray-400 cursor-not-allowed' : (!content.trim() || !author.trim() ? 'bg-gray-300' : 'bg-black hover:bg-gray-800 active:scale-[0.98]')}`}>
-                {isChecking ? <><Loader2 className="w-5 h-5 mr-2" />{t.checking}</> : t.checkBtn}
+              <button onClick={handlePost} disabled={isChecking || !content.trim() || !author.trim()} className={`w-full py-5 rounded-xl font-bold tracking-widest text-white flex items-center justify-center transition-all shadow-lg ${isChecking ? 'bg-[#8C8C85] cursor-not-allowed' : (!content.trim() || !author.trim() ? 'bg-[#C4C3BE]' : 'bg-[#2C2C2A] hover:bg-black active:scale-[0.98]')}`}>
+                {isChecking ? <><LoaderIcon className="w-5 h-5 mr-3" />{t.checking}</> : t.checkBtn}
               </button>
             </div>
           </div>
@@ -837,69 +865,81 @@
       );
     }
 
-    function ProfileScreen({ userProfile, posts, onPostClick, onUpdateProfile, t, lang }) {
-      const [isEditingSettings, setIsEditingSettings] = useState(false);
-      const [apiKeyInput, setApiKeyInput] = useState(userProfile?.geminiApiKey || '');
-
-      const toggleFont = () => onUpdateProfile({ fontPreference: userProfile.fontPreference === 'sans' ? 'serif' : 'sans' });
-      const toggleLang = () => onUpdateProfile({ appLanguage: userProfile.appLanguage === 'ja' ? 'en' : 'ja' });
-      const saveSettings = () => { onUpdateProfile({ geminiApiKey: apiKeyInput }); setIsEditingSettings(false); };
-
+    function ProfileScreen({ userProfile, posts, onPostClick, t, lang }) {
       return (
-        <div className="flex flex-col min-h-full bg-white">
-          <div className="p-8 border-b border-gray-100 bg-gray-50 flex flex-col items-center">
-            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mb-4 shadow-inner">
-              <User className="w-12 h-12 text-gray-500" />
+        <div className="flex flex-col min-h-full bg-[var(--bg-color)] animate-fade-up">
+          <div className="p-12 border-b border-[var(--border-color)] bg-white flex flex-col items-center">
+            <div className="w-24 h-24 bg-[#F4F3EF] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#EAE9E4]">
+              <UserIcon className="w-10 h-10 text-[#8C8C85]" />
             </div>
-            <h2 className="text-2xl font-bold">{userProfile?.username}</h2>
-            <span className="text-sm font-medium text-gray-500 mt-1 bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">{t.memberNo}: {userProfile?.userNumber}</span>
-            
-            <div className="flex flex-wrap justify-center gap-2 mt-6">
-              <button onClick={toggleFont} className="px-4 py-2 bg-white border border-gray-200 rounded-full text-xs font-bold shadow-sm hover:bg-gray-50 transition">
-                {userProfile?.fontPreference === 'serif' ? t.fontMincho : t.fontGothic}
-              </button>
-              <button onClick={toggleLang} className="px-4 py-2 bg-white border border-gray-200 rounded-full text-xs font-bold shadow-sm hover:bg-gray-50 transition flex items-center gap-1">
-                <Languages className="w-4 h-4" />
-                {t.langSetting}
-              </button>
-              <button onClick={() => setIsEditingSettings(!isEditingSettings)} className="p-2 bg-white border border-gray-200 rounded-full text-sm shadow-sm hover:bg-gray-50 transition">
-                <Settings className="w-4 h-4 text-gray-600" />
-              </button>
-            </div>
+            <h2 className="text-3xl font-bold tracking-widest mb-2">{userProfile?.username}</h2>
+            <span className="text-xs font-sans font-bold text-[#8C8C85] bg-[#FDFDFB] px-4 py-1.5 rounded-full border border-[var(--border-color)] shadow-sm">{t.memberNo}: {userProfile?.userNumber}</span>
           </div>
 
-          {isEditingSettings && (
-            <div className="p-5 border-b border-gray-100 bg-gray-100">
-              <h3 className="font-bold text-sm mb-2">Gemini API Key</h3>
-              <div className="flex gap-2">
-                <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="flex-1 p-2 text-sm rounded border border-gray-300 outline-none" placeholder="AIzaSy..." />
-                <button onClick={saveSettings} className="bg-black text-white px-4 py-2 rounded text-sm font-bold">Save</button>
-              </div>
-            </div>
-          )}
-
           <div className="flex-1">
-            <div className="px-5 py-4 border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-md z-10">
-              <h3 className="font-bold text-gray-800">{t.myPosts}</h3>
+            <div className="px-8 py-6 border-b border-[var(--border-color)] sticky top-0 bg-[#FDFDFB]/90 backdrop-blur-md z-10">
+              <h3 className="font-bold tracking-widest text-[#2C2C2A] text-sm uppercase">{t.myPosts}</h3>
             </div>
             {posts.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">{t.noPosts}</div>
+              <div className="p-12 text-center text-[#8C8C85] tracking-widest">{t.noPosts}</div>
             ) : (
               posts.sort((a, b) => b.createdAt - a.createdAt).map(post => (
-                <div key={post.id} className="border-b border-gray-100 p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => onPostClick(post)}>
-                  <div className="flex justify-between items-baseline mb-2">
-                    <h4 className="font-bold text-sm">{post.author}</h4>
+                <div key={post.id} className="border-b border-[var(--border-color)] p-8 hover:bg-white transition-colors cursor-pointer" onClick={() => onPostClick(post)}>
+                  <div className="flex justify-between items-baseline mb-4">
+                    <h4 className="font-bold text-lg">{post.author}</h4>
                     <AgeDisplay relative={post.estimatedAge_relative} absolute={post.estimatedAge_absolute} />
                   </div>
-                  <p className="text-gray-800 text-[15px] truncate">{lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content)}</p>
-                  <div className="flex items-center justify-end mt-2">
-                    <Heart className="w-4 h-4 text-red-500 fill-red-500 mr-1" />
-                    <span className="text-xs text-gray-500 font-medium">{post.likes || 0}</span>
-                  </div>
+                  <p className="text-[#2C2C2A] text-[16px] leading-[2.0] line-clamp-3">{lang === 'ja' ? (post.ja_text || post.content) : (post.en_text || post.content)}</p>
                 </div>
               ))
             )}
           </div>
+        </div>
+      );
+    }
+
+    function SettingsScreen({ userProfile, onUpdateProfile, onLogout, t }) {
+      const [apiKeyInput, setApiKeyInput] = useState(userProfile?.geminiApiKey || '');
+
+      const toggleFont = () => onUpdateProfile({ fontPreference: userProfile.fontPreference === 'sans' ? 'serif' : 'sans' });
+      const toggleLang = () => onUpdateProfile({ appLanguage: userProfile.appLanguage === 'ja' ? 'en' : 'ja' });
+      const saveSettings = () => onUpdateProfile({ geminiApiKey: apiKeyInput });
+
+      return (
+        <div className="p-8 md:p-12 min-h-full bg-[var(--bg-color)] animate-fade-up">
+           <h2 className="text-3xl font-bold tracking-widest text-[#2C2C2A] mb-10">{t.settings}</h2>
+
+           <div className="space-y-8 max-w-md">
+              {/* Display Settings */}
+              <div className="bg-white p-6 rounded-2xl border border-[var(--border-color)] shadow-sm">
+                <h3 className="text-sm font-bold tracking-widest text-[#8C8C85] mb-6 uppercase">Display & Language</h3>
+                <div className="space-y-4">
+                  <button onClick={toggleFont} className="w-full text-left px-5 py-4 bg-[#FDFDFB] border border-[#EAE9E4] rounded-xl text-sm font-bold tracking-widest hover:bg-[#F4F3EF] transition-colors flex justify-between items-center">
+                    {t.fontSetting} <span className={userProfile?.fontPreference === 'serif' ? 'font-serif' : 'font-sans'}>{userProfile?.fontPreference === 'serif' ? t.fontMincho : t.fontGothic}</span>
+                  </button>
+                  <button onClick={toggleLang} className="w-full text-left px-5 py-4 bg-[#FDFDFB] border border-[#EAE9E4] rounded-xl text-sm font-bold tracking-widest hover:bg-[#F4F3EF] transition-colors flex justify-between items-center">
+                     <div className="flex items-center gap-2"><Languages className="w-4 h-4"/> {t.langSetting}</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Config */}
+              <div className="bg-white p-6 rounded-2xl border border-[var(--border-color)] shadow-sm">
+                 <h3 className="text-sm font-bold tracking-widest text-[#8C8C85] mb-4 uppercase">Gemini AI Engine</h3>
+                 <p className="text-xs text-[#8C8C85] leading-relaxed mb-4">AIの照合・整形機能を使用するにはAPIキーを入力してください。デバイス内に保存されます。</p>
+                 <div className="flex gap-2">
+                    <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="flex-1 p-3 text-sm rounded-xl border border-[#EAE9E4] outline-none focus:border-[#2C2C2A] transition-colors" placeholder="AIzaSy..." />
+                    <button onClick={saveSettings} className="bg-[#2C2C2A] text-white px-5 py-3 rounded-xl text-sm font-bold tracking-wider hover:bg-black transition-colors">Save</button>
+                 </div>
+              </div>
+
+              {/* Account */}
+              <div className="pt-8">
+                <button onClick={onLogout} className="w-full py-4 text-red-600 font-bold tracking-widest border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
+                  {t.logout}
+                </button>
+              </div>
+           </div>
         </div>
       );
     }
