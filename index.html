@@ -281,21 +281,28 @@
 
       // Data Fetching (Real)
       useEffect(() => {
-        if (!authUser) return;
-        const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data');
-        const unsubP = profileRef.onSnapshot(doc => {
-          setUserProfile(doc.exists ? doc.data() : null);
-          setIsInitializing(false);
-        });
+  if (!authUser) return;
+  const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(authUser.uid).collection('profile').doc('data');
+  
+  // 第2引数にエラー時の処理を追加
+  const unsubP = profileRef.onSnapshot(doc => {
+    setUserProfile(doc.exists ? doc.data() : null);
+    setIsInitializing(false);
+  }, (error) => {
+    console.error("プロフィール取得エラー:", error);
+    setIsInitializing(false); // 取得失敗時もロードを解除する
+  });
 
-        const postsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts');
-        const unsubPosts = postsRef.onSnapshot(snap => {
-          const postsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          postsData.sort((a, b) => b.createdAt - a.createdAt);
-          setPosts(postsData);
-        });
+  const postsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('posts');
+  const unsubPosts = postsRef.onSnapshot(snap => {
+    const postsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    postsData.sort((a, b) => b.createdAt - a.createdAt);
+    setPosts(postsData);
+  }, (error) => {
+    console.error("投稿データ取得エラー:", error);
+  });
 
-        return () => { unsubP(); unsubPosts(); };
+  return () => { unsubP(); unsubPosts(); };
 }, [authUser]);
 
       // Actions
@@ -336,26 +343,34 @@
       };
 
       const handleLogin = async (email, password) => {
-        setIsInitializing(true);
-        await auth.signInWithEmailAndPassword(email, password);
-      };
+  setIsInitializing(true);
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (error) {
+    setIsInitializing(false); // エラー時にロード画面を解除
+    throw error; // LoginScreenにエラーを渡すために再度throwする
+  }
+};
 
       const handleSignUp = async (email, password, username) => {
-        setIsInitializing(true);
-        // 1. メアドとパスワードでアカウント作成
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const newUser = userCredential.user;
-        
-        // 2. 作成されたユーザーのプロフィールをFirestoreに保存
-        await db.collection('artifacts').doc(appId).collection('users').doc(newUser.uid).collection('profile').doc('data').set({
-          username: username, 
-          userNumber: Math.floor(1000+Math.random()*9000), 
-          followedAuthors: [], 
-          fontPreference: 'serif', 
-          appLanguage: 'ja', 
-          geminiApiKey: ''
-        });
-      };
+  setIsInitializing(true);
+  try {
+    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    const newUser = userCredential.user;
+    
+    await db.collection('artifacts').doc(appId).collection('users').doc(newUser.uid).collection('profile').doc('data').set({
+      username: username, 
+      userNumber: Math.floor(1000+Math.random()*9000), 
+      followedAuthors: [], 
+      fontPreference: 'serif', 
+      appLanguage: 'ja', 
+      geminiApiKey: ''
+    });
+  } catch (error) {
+    setIsInitializing(false); // エラー時にロード画面を解除
+    throw error;
+  }
+};
 
       if (isInitializing) {
         return (
