@@ -83,7 +83,8 @@
     }
 
     const isFirebaseReady = true;
-    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-kingen';
+// 環境に依存せず、常に同じデータベースのパス（'default-kingen'）を参照するように固定します
+const appId = 'default-kingen';
 
     // --- Icons ---
     const Icon = ({ children, className = "w-6 h-6", ...props }) => (
