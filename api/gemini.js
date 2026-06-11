@@ -1,20 +1,65 @@
-// api/gemini.js の基本的な骨組み
 export default async function handler(req, res) {
-  // POSTメソッド以外は405エラーではじく（ここで405が出ている可能性が高いです）
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'POSTメソッドのみ許可されています' });
   }
 
   try {
     const { prompt, schema } = req.body;
-    
-    // ここでGoogleのGemini API（https://generativelanguage.googleapis.com/...）へ
-    // あなたのAPIキー（環境変数）を使ってリクエストを送る処理を書きます
-    
-    // 仮の成功レスポンス
-    res.status(200).json({ isValid: true, ja_text: "テスト" });
+
+    // Vercelの環境変数からAPIキーを取得
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'APIキーが設定されていません' });
+    }
+
+    // スキーマをGemini用の形式に変換
+    const properties = {};
+    for (const [key, value] of Object.entries(schema)) {
+      if (value.type === 'ARRAY') {
+        properties[key] = { type: 'ARRAY', items: { type: 'STRING' } };
+      } else {
+        properties[key] = { type: value.type };
+      }
+    }
+
+    // Gemini APIへリクエスト
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: properties,
+              required: Object.keys(schema)
+            }
+          }
+        })
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const errData = await geminiRes.json();
+      console.error('Gemini APIエラー:', errData);
+      return res.status(500).json({ error: errData.error?.message || 'Gemini APIエラー' });
+    }
+
+    const geminiData = await geminiRes.json();
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      return res.status(500).json({ error: 'Geminiからの応答が空でした' });
+    }
+
+    const result = JSON.parse(text);
+    return res.status(200).json(result);
 
   } catch (error) {
-    res.status(500).json({ error: 'サーバー内部エラーが発生しました' });
+    console.error('サーバーエラー:', error);
+    return res.status(500).json({ error: error.message || 'サーバー内部エラーが発生しました' });
   }
 }
